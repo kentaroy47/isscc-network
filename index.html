@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ISSCC 2026 Author Network</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: #0a0a0f;
+            color: #e0e0e0;
+            overflow: hidden;
+        }
+
+        #container {
+            display: flex;
+            height: 100vh;
+        }
+
+        #sidebar {
+            width: 320px;
+            background: #12121a;
+            border-right: 1px solid #2a2a3a;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        #sidebar h1 {
+            padding: 20px;
+            font-size: 1.4em;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        #stats {
+            padding: 15px 20px;
+            background: #1a1a25;
+            border-bottom: 1px solid #2a2a3a;
+            font-size: 0.85em;
+        }
+
+        #stats div {
+            margin: 5px 0;
+            color: #888;
+        }
+
+        #stats span {
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        #filters {
+            padding: 15px 20px;
+            border-bottom: 1px solid #2a2a3a;
+        }
+
+        #filters label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 0.85em;
+            color: #888;
+        }
+
+        #filters select, #filters input {
+            width: 100%;
+            padding: 8px 12px;
+            background: #1a1a25;
+            border: 1px solid #2a2a3a;
+            border-radius: 6px;
+            color: #e0e0e0;
+            font-size: 0.9em;
+            margin-bottom: 12px;
+        }
+
+        #filters select:focus, #filters input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        #search-results {
+            max-height: 150px;
+            overflow-y: auto;
+            margin-top: 5px;
+        }
+
+        .search-item {
+            padding: 8px 12px;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 0.85em;
+        }
+
+        .search-item:hover {
+            background: #2a2a3a;
+        }
+
+        #info-panel {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px 20px;
+        }
+
+        #info-panel h2 {
+            font-size: 1.1em;
+            margin-bottom: 10px;
+            color: #667eea;
+        }
+
+        #info-panel h3 {
+            font-size: 0.95em;
+            margin: 15px 0 8px 0;
+            color: #888;
+        }
+
+        .affiliation {
+            font-size: 0.85em;
+            color: #aaa;
+            margin-bottom: 10px;
+        }
+
+        .paper-list {
+            list-style: none;
+        }
+
+        .paper-list li {
+            padding: 8px 0;
+            border-bottom: 1px solid #2a2a3a;
+            font-size: 0.85em;
+        }
+
+        .paper-id {
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        .coauthor-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .coauthor-tag {
+            background: #2a2a3a;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .coauthor-tag:hover {
+            background: #667eea;
+        }
+
+        #graph-container {
+            flex: 1;
+            position: relative;
+        }
+
+        #graph {
+            width: 100%;
+            height: 100%;
+        }
+
+        .node {
+            cursor: pointer;
+        }
+
+        .node circle {
+            stroke: #fff;
+            stroke-width: 1.5px;
+            transition: r 0.2s;
+        }
+
+        .node:hover circle {
+            stroke-width: 3px;
+        }
+
+        .node text {
+            font-size: 10px;
+            fill: #e0e0e0;
+            pointer-events: none;
+        }
+
+        .link {
+            stroke: #4a4a5a;
+            stroke-opacity: 0.4;
+        }
+
+        .link.highlighted {
+            stroke: #667eea;
+            stroke-opacity: 0.8;
+        }
+
+        .node.highlighted circle {
+            stroke: #667eea;
+            stroke-width: 3px;
+        }
+
+        .node.dimmed circle {
+            opacity: 0.2;
+        }
+
+        .node.dimmed text {
+            opacity: 0.2;
+        }
+
+        .link.dimmed {
+            stroke-opacity: 0.05;
+        }
+
+        #legend {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(18, 18, 26, 0.9);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #2a2a3a;
+            font-size: 0.8em;
+        }
+
+        #legend h4 {
+            margin-bottom: 10px;
+            color: #888;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin: 5px 0;
+        }
+
+        .legend-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid #2a2a3a;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        #controls {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .control-btn {
+            background: rgba(18, 18, 26, 0.9);
+            border: 1px solid #2a2a3a;
+            color: #e0e0e0;
+            padding: 8px 15px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85em;
+            transition: all 0.2s;
+        }
+
+        .control-btn:hover {
+            background: #2a2a3a;
+            border-color: #667eea;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div id="sidebar">
+            <h1>ISSCC 2026 Author Network</h1>
+            <div id="stats">
+                <div>Authors: <span id="author-count">-</span></div>
+                <div>Papers: <span id="paper-count">-</span></div>
+                <div>Connections: <span id="edge-count">-</span></div>
+            </div>
+            <div id="filters">
+                <label>Search Author</label>
+                <input type="text" id="search" placeholder="Type author name...">
+                <div id="search-results"></div>
+
+                <label>Filter by Session</label>
+                <select id="session-filter">
+                    <option value="">All Sessions</option>
+                </select>
+
+                <label>Min. Papers</label>
+                <input type="range" id="min-papers" min="1" max="5" value="1">
+                <span id="min-papers-value">1</span>
+            </div>
+            <div id="info-panel">
+                <p style="color: #666; font-size: 0.9em;">Click on a node to see author details</p>
+            </div>
+        </div>
+        <div id="graph-container">
+            <div id="loading">
+                <div class="spinner"></div>
+                <div>Loading author network...</div>
+            </div>
+            <svg id="graph"></svg>
+            <div id="controls">
+                <button class="control-btn" id="reset-zoom">Reset View</button>
+                <button class="control-btn" id="toggle-labels">Hide Labels</button>
+            </div>
+            <div id="legend">
+                <h4>Sessions</h4>
+                <div id="legend-items"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Session color mapping
+        const sessionColors = {
+            'SESSION 2': '#e74c3c',
+            'SESSION 3': '#3498db',
+            'SESSION 4': '#2ecc71',
+            'SESSION 5': '#f39c12',
+            'SESSION 6': '#9b59b6',
+            'SESSION 7': '#1abc9c',
+            'SESSION 8': '#e67e22',
+            'SESSION 9': '#34495e',
+            'SESSION 10': '#16a085',
+            'SESSION 11': '#c0392b',
+            'SESSION 12': '#2980b9',
+            'SESSION 13': '#27ae60',
+            'SESSION 14': '#d35400',
+            'SESSION 15': '#8e44ad',
+            'SESSION 16': '#17a589',
+            'SESSION 17': '#cb4335',
+            'SESSION 18': '#2e86de',
+            'SESSION 19': '#28b463',
+            'SESSION 20': '#ca6f1e',
+            'SESSION 21': '#6c3483',
+            'SESSION 22': '#148f77',
+            'SESSION 23': '#922b21',
+            'SESSION 24': '#1a5276',
+            'SESSION 25': '#1e8449',
+            'SESSION 26': '#b9770e',
+            'SESSION 27': '#5b2c6f',
+            'SESSION 28': '#0e6655',
+            'SESSION 29': '#7b241c',
+            'SESSION 30': '#154360',
+            'SESSION 31': '#186a3b',
+            'SESSION 32': '#9c640c',
+            'SESSION 33': '#4a235a',
+            'SESSION 34': '#0b5345',
+            'SESSION 35': '#641e16',
+        };
+
+        function getSessionColor(session) {
+            return sessionColors[session] || '#667eea';
+        }
+
+        // Load and process CSV data
+        async function loadData() {
+            const response = await fetch('isscc2026_authors_affiliations_papers.csv');
+            const text = await response.text();
+            return parseCSV(text);
+        }
+
+        function parseCSV(text) {
+            const lines = text.split('\n');
+            const headers = parseCSVLine(lines[0]);
+            const data = [];
+
+            for (let i = 1; i < lines.length; i++) {
+                if (lines[i].trim()) {
+                    const values = parseCSVLine(lines[i]);
+                    const row = {};
+                    headers.forEach((header, index) => {
+                        row[header] = values[index] || '';
+                    });
+                    data.push(row);
+                }
+            }
+            return data;
+        }
+
+        function parseCSVLine(line) {
+            const result = [];
+            let current = '';
+            let inQuotes = false;
+
+            for (let i = 0; i < line.length; i++) {
+                const char = line[i];
+                if (char === '"') {
+                    inQuotes = !inQuotes;
+                } else if (char === ',' && !inQuotes) {
+                    result.push(current.trim());
+                    current = '';
+                } else {
+                    current += char;
+                }
+            }
+            result.push(current.trim());
+            return result;
+        }
+
+        function buildGraph(data) {
+            const authors = new Map();
+            const papers = new Map();
+            const edges = new Map();
+
+            // First pass: collect author and paper info
+            data.forEach(row => {
+                const authorName = row.author_name;
+                const paperId = row.paper_id;
+                const session = row.session;
+                const paperTitle = row.paper_title;
+                const affiliation = row.affiliations_resolved;
+
+                if (!authorName) return;
+
+                // Update author info
+                if (!authors.has(authorName)) {
+                    authors.set(authorName, {
+                        id: authorName,
+                        name: authorName,
+                        papers: new Set(),
+                        sessions: new Set(),
+                        affiliations: new Set(),
+                        coauthors: new Set()
+                    });
+                }
+                const author = authors.get(authorName);
+                author.papers.add(paperId);
+                author.sessions.add(session);
+                if (affiliation) {
+                    affiliation.split(' | ').forEach(aff => author.affiliations.add(aff.trim()));
+                }
+
+                // Update paper info
+                if (!papers.has(paperId)) {
+                    papers.set(paperId, {
+                        id: paperId,
+                        title: paperTitle,
+                        session: session,
+                        authors: []
+                    });
+                }
+                papers.get(paperId).authors.push(authorName);
+            });
+
+            // Second pass: create edges between co-authors
+            papers.forEach(paper => {
+                const authorList = paper.authors;
+                for (let i = 0; i < authorList.length; i++) {
+                    for (let j = i + 1; j < authorList.length; j++) {
+                        const a1 = authorList[i];
+                        const a2 = authorList[j];
+                        const edgeKey = [a1, a2].sort().join('|||');
+
+                        if (!edges.has(edgeKey)) {
+                            edges.set(edgeKey, {
+                                source: a1,
+                                target: a2,
+                                papers: new Set(),
+                                sessions: new Set()
+                            });
+                        }
+                        edges.get(edgeKey).papers.add(paper.id);
+                        edges.get(edgeKey).sessions.add(paper.session);
+
+                        // Update coauthors
+                        authors.get(a1).coauthors.add(a2);
+                        authors.get(a2).coauthors.add(a1);
+                    }
+                }
+            });
+
+            // Convert to arrays
+            const nodes = Array.from(authors.values()).map(a => ({
+                ...a,
+                papers: Array.from(a.papers),
+                sessions: Array.from(a.sessions),
+                affiliations: Array.from(a.affiliations),
+                coauthors: Array.from(a.coauthors),
+                primarySession: Array.from(a.sessions)[0]
+            }));
+
+            const links = Array.from(edges.values()).map(e => ({
+                ...e,
+                papers: Array.from(e.papers),
+                sessions: Array.from(e.sessions),
+                weight: e.papers.size
+            }));
+
+            return { nodes, links, papers: Array.from(papers.values()) };
+        }
+
+        // Main visualization
+        async function init() {
+            const rawData = await loadData();
+            const { nodes, links, papers } = buildGraph(rawData);
+
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('author-count').textContent = nodes.length;
+            document.getElementById('paper-count').textContent = papers.length;
+            document.getElementById('edge-count').textContent = links.length;
+
+            // Get unique sessions for filter
+            const sessions = [...new Set(nodes.flatMap(n => n.sessions))].sort();
+            const sessionFilter = document.getElementById('session-filter');
+            sessions.forEach(session => {
+                const option = document.createElement('option');
+                option.value = session;
+                option.textContent = session;
+                sessionFilter.appendChild(option);
+            });
+
+            // Build legend
+            const legendItems = document.getElementById('legend-items');
+            sessions.slice(0, 10).forEach(session => {
+                const item = document.createElement('div');
+                item.className = 'legend-item';
+                item.innerHTML = `<div class="legend-color" style="background: ${getSessionColor(session)}"></div>${session}`;
+                legendItems.appendChild(item);
+            });
+
+            // Setup SVG
+            const container = document.getElementById('graph-container');
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+
+            const svg = d3.select('#graph')
+                .attr('width', width)
+                .attr('height', height);
+
+            const g = svg.append('g');
+
+            // Zoom behavior
+            const zoom = d3.zoom()
+                .scaleExtent([0.1, 10])
+                .on('zoom', (event) => {
+                    g.attr('transform', event.transform);
+                });
+
+            svg.call(zoom);
+
+            // Create simulation
+            const simulation = d3.forceSimulation(nodes)
+                .force('link', d3.forceLink(links).id(d => d.id).distance(50))
+                .force('charge', d3.forceManyBody().strength(-100))
+                .force('center', d3.forceCenter(width / 2, height / 2))
+                .force('collision', d3.forceCollide().radius(d => Math.sqrt(d.papers.length) * 5 + 10));
+
+            // Create links
+            const link = g.append('g')
+                .selectAll('line')
+                .data(links)
+                .join('line')
+                .attr('class', 'link')
+                .attr('stroke-width', d => Math.sqrt(d.weight));
+
+            // Create nodes
+            const node = g.append('g')
+                .selectAll('g')
+                .data(nodes)
+                .join('g')
+                .attr('class', 'node')
+                .call(d3.drag()
+                    .on('start', dragstarted)
+                    .on('drag', dragged)
+                    .on('end', dragended));
+
+            node.append('circle')
+                .attr('r', d => Math.sqrt(d.papers.length) * 4 + 4)
+                .attr('fill', d => getSessionColor(d.primarySession));
+
+            const labels = node.append('text')
+                .text(d => d.name)
+                .attr('dx', d => Math.sqrt(d.papers.length) * 4 + 8)
+                .attr('dy', 4);
+
+            // Node interactions
+            node.on('click', (event, d) => showAuthorInfo(d, papers));
+
+            node.on('mouseover', (event, d) => {
+                // Highlight connected nodes and links
+                const connectedNodes = new Set(d.coauthors);
+                connectedNodes.add(d.id);
+
+                node.classed('highlighted', n => n.id === d.id)
+                    .classed('dimmed', n => !connectedNodes.has(n.id));
+
+                link.classed('highlighted', l => l.source.id === d.id || l.target.id === d.id)
+                    .classed('dimmed', l => l.source.id !== d.id && l.target.id !== d.id);
+            });
+
+            node.on('mouseout', () => {
+                node.classed('highlighted', false).classed('dimmed', false);
+                link.classed('highlighted', false).classed('dimmed', false);
+            });
+
+            // Simulation tick
+            simulation.on('tick', () => {
+                link
+                    .attr('x1', d => d.source.x)
+                    .attr('y1', d => d.source.y)
+                    .attr('x2', d => d.target.x)
+                    .attr('y2', d => d.target.y);
+
+                node.attr('transform', d => `translate(${d.x},${d.y})`);
+            });
+
+            // Drag functions
+            function dragstarted(event) {
+                if (!event.active) simulation.alphaTarget(0.3).restart();
+                event.subject.fx = event.subject.x;
+                event.subject.fy = event.subject.y;
+            }
+
+            function dragged(event) {
+                event.subject.fx = event.x;
+                event.subject.fy = event.y;
+            }
+
+            function dragended(event) {
+                if (!event.active) simulation.alphaTarget(0);
+                event.subject.fx = null;
+                event.subject.fy = null;
+            }
+
+            // Search functionality
+            const searchInput = document.getElementById('search');
+            const searchResults = document.getElementById('search-results');
+
+            searchInput.addEventListener('input', (e) => {
+                const query = e.target.value.toLowerCase();
+                searchResults.innerHTML = '';
+
+                if (query.length < 2) return;
+
+                const matches = nodes.filter(n => n.name.toLowerCase().includes(query)).slice(0, 10);
+                matches.forEach(match => {
+                    const div = document.createElement('div');
+                    div.className = 'search-item';
+                    div.textContent = match.name;
+                    div.addEventListener('click', () => {
+                        focusNode(match);
+                        searchInput.value = '';
+                        searchResults.innerHTML = '';
+                    });
+                    searchResults.appendChild(div);
+                });
+            });
+
+            function focusNode(d) {
+                // Zoom to node
+                const transform = d3.zoomIdentity
+                    .translate(width / 2, height / 2)
+                    .scale(2)
+                    .translate(-d.x, -d.y);
+
+                svg.transition()
+                    .duration(750)
+                    .call(zoom.transform, transform);
+
+                showAuthorInfo(d, papers);
+            }
+
+            // Session filter
+            sessionFilter.addEventListener('change', (e) => {
+                const session = e.target.value;
+                if (session) {
+                    node.style('opacity', d => d.sessions.includes(session) ? 1 : 0.1);
+                    link.style('opacity', l =>
+                        l.source.sessions.includes(session) && l.target.sessions.includes(session) ? 0.4 : 0.02
+                    );
+                } else {
+                    node.style('opacity', 1);
+                    link.style('opacity', 0.4);
+                }
+            });
+
+            // Min papers filter
+            const minPapersInput = document.getElementById('min-papers');
+            const minPapersValue = document.getElementById('min-papers-value');
+
+            minPapersInput.addEventListener('input', (e) => {
+                const min = parseInt(e.target.value);
+                minPapersValue.textContent = min;
+
+                node.style('opacity', d => d.papers.length >= min ? 1 : 0.1);
+                link.style('opacity', l =>
+                    l.source.papers.length >= min && l.target.papers.length >= min ? 0.4 : 0.02
+                );
+            });
+
+            // Controls
+            document.getElementById('reset-zoom').addEventListener('click', () => {
+                svg.transition()
+                    .duration(750)
+                    .call(zoom.transform, d3.zoomIdentity);
+            });
+
+            let labelsVisible = true;
+            document.getElementById('toggle-labels').addEventListener('click', (e) => {
+                labelsVisible = !labelsVisible;
+                labels.style('display', labelsVisible ? 'block' : 'none');
+                e.target.textContent = labelsVisible ? 'Hide Labels' : 'Show Labels';
+            });
+        }
+
+        function showAuthorInfo(author, papers) {
+            const panel = document.getElementById('info-panel');
+            const authorPapers = papers.filter(p => author.papers.includes(p.id));
+
+            panel.innerHTML = `
+                <h2>${author.name}</h2>
+                <div class="affiliation">${author.affiliations.join('<br>')}</div>
+                <div><strong>${author.papers.length}</strong> paper(s) in ISSCC 2026</div>
+
+                <h3>Papers</h3>
+                <ul class="paper-list">
+                    ${authorPapers.map(p => `
+                        <li>
+                            <span class="paper-id">${p.id}</span>
+                            ${p.title}
+                        </li>
+                    `).join('')}
+                </ul>
+
+                <h3>Co-authors (${author.coauthors.length})</h3>
+                <div class="coauthor-list">
+                    ${author.coauthors.slice(0, 20).map(c => `<span class="coauthor-tag">${c}</span>`).join('')}
+                    ${author.coauthors.length > 20 ? `<span class="coauthor-tag">+${author.coauthors.length - 20} more</span>` : ''}
+                </div>
+            `;
+        }
+
+        init();
+    </script>
+</body>
+</html>
